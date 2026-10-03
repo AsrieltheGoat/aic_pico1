@@ -1,0 +1,46 @@
+name: Build Firmware
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            ninja-build
+
+      - name: Install Pico SDK
+        run: |
+          git clone --depth 1 \
+            https://github.com/raspberrypi/pico-sdk.git \
+            "$RUNNER_TEMP/pico-sdk"
+
+          git -C "$RUNNER_TEMP/pico-sdk" submodule update --init --depth 1
+
+      - name: Build firmware
+        env:
+          PICO_SDK_PATH: ${{ runner.temp }}/pico-sdk
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: AIC Pico Build ${{ github.run_number }}
+          generate_release_notes: true
+          files: aic_pico.uf2
