@@ -5,7 +5,7 @@
 
 #if defined BOARD_AIC_PICO
 
-#define I2C_PORT_LIST { { i2c0, 1, 0 }, { i2c0, 21, 20 }, { i2c1, 19, 18 }, { i2c0, 17, 16 }, { i2c1, 27, 26 } }
+#define I2C_PORT_LIST { { i2c0, 21, 20 }, { i2c1, 19, 18 }, { i2c0, 17, 16 }, { i2c1, 27, 26 } }
 #define I2C_FREQ 400*1000
 
 #define SPI_PORT spi0
@@ -20,7 +20,7 @@
 #define DEFAULT_RGB_ORDER GRB
 #define LED_DEF { 25, 22, 13, 15 }
 
-#define KEYPAD_DEF {}
+#define KEYPAD_DEF { 6, 7, 8, 3, 4, 5, 0, 1, 2, 9, 10, 11 }
 #define AIC_TOUCH_EN 14
 
 /* HID Keycode: https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h */

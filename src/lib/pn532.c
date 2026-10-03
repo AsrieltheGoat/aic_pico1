@@ -195,25 +195,20 @@ static void write_nack()
 
 int pn532_peak_response_len()
 {
-    uint8_t buf[5] = {0};
+    uint8_t buf[6];
     if (!pn532_wait_ready()) {
         return -1;
     }
-
-    // A new I2C read transaction starts with the PN532 ready byte again.
-    // read_frame() consumes that status byte and returns the actual frame.
-    if (read_frame(buf, sizeof(buf)) != (int)sizeof(buf)) {
-        return -1;
-    }
-
-    if (buf[0] != PN532_PREAMBLE ||
-        buf[1] != PN532_STARTCODE1 ||
-        buf[2] != PN532_STARTCODE2) {
+    pn532_read(buf, 6);
+    if (buf[0] != 0x01 ||
+        buf[1] != PN532_PREAMBLE ||
+        buf[2] != PN532_STARTCODE1 ||
+        buf[3] != PN532_STARTCODE2) {
         return -1;
     }
 
     write_nack();
-    return buf[3];
+    return buf[4];
 }
 
 int pn532_read_response(uint8_t cmd, uint8_t *resp, uint8_t len)

@@ -350,12 +350,14 @@ void init()
     light_set_rgb_order(aic_cfg->light.rgb_order);
     light_rainbow(1, 0, aic_cfg->light.level_idle);
 
+    if (!aic_runtime.touch) {
+        keypad_init();
+    }
+
     pico_led_off();
 
     spi_overclock();
 
-    // Give the PN532 time to finish power-up before probing it.
-    sleep_ms(500);
     find_nfc_module();
 
     nfc_set_wait_loop(wait_loop);
@@ -374,6 +376,30 @@ void init()
 }
 
 /* if certain key pressed when booting, enter update mode */
+static void boot_update_check()
+{
+    const uint8_t pins[] = { 10, 11 }; // keypad 00 and *
+    bool all_pressed = true;
+    for (int i = 0; i < sizeof(pins); i++) {
+        uint8_t gpio = pins[i];
+        gpio_init(gpio);
+        gpio_set_function(gpio, GPIO_FUNC_SIO);
+        gpio_set_dir(gpio, GPIO_IN);
+        gpio_pull_up(gpio);
+        sleep_ms(1);
+        if (gpio_get(gpio)) {
+            all_pressed = false;
+            break;
+        }
+    }
+
+    if (all_pressed) {
+        sleep_ms(100);
+        reset_usb_boot(0, 2);
+        return;
+    }
+}
+
 static void sys_init()
 {
     sleep_ms(30);
@@ -384,6 +410,7 @@ static void sys_init()
 int main(void)
 {
     sys_init();
+    boot_update_check();
     init();
     multicore_launch_core1(core1_loop);
     core0_loop();
