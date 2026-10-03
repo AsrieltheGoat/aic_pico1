@@ -20,7 +20,7 @@
 #define DEFAULT_RGB_ORDER GRB
 #define LED_DEF { 25, 22, 13, 15 }
 
-#define KEYPAD_DEF { }
+#define KEYPAD_DEF { 6, 7, 8, 3, 4, 5, 0, 1, 2, 9, 10, 11 }
 #define AIC_TOUCH_EN 14
 
 /* HID Keycode: https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h */

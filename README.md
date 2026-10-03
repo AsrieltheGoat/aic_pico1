@@ -8,9 +8,10 @@ This project is a modified build of [AIC Pico](https://github.com/whowechina/aic
 
 ## Hardware
 
+- Removed keypad
 - Waveshare Pico1
 - PN532 NFC reader
-- I²C: SDA GPIO 0, SCL GPIO 1
+- Add: IC: SDA GPIO 0, SCL GPIO 1 to PN532 GPIOs
 
 ## Build
 
