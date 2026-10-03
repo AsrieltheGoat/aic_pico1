@@ -11,7 +11,6 @@ This project is a modified build of [AIC Pico](https://github.com/whowechina/aic
 
 - Waveshare RP2040 Zero
 - PN532 NFC reader
-- Add: IC: SDA GPIO 0, SCL GPIO 1 to PN532 GPIOs
 
 ## Build
 
