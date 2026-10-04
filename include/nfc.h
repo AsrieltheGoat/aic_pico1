@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "hardware/i2c.h"
-#include "hardware/spi.h"
 
 typedef enum {
     NFC_CARD_NONE = 0,
@@ -39,11 +38,8 @@ typedef enum {
 } nfc_card_name;
 
 const char *nfc_card_name_str(nfc_card_name card_name);
-nfc_card_name nfc_last_card_name();
 void nfc_identify_last_card();
 
-typedef void (*card_name_listener_func)(nfc_card_name card_name);
-void nfc_set_card_name_listener(card_name_listener_func listener);
 
 typedef void (*nfc_wait_loop_t)();
 typedef struct {
@@ -64,12 +60,8 @@ typedef struct {
 extern nfc_runtime_t nfc_runtime;
 
 bool nfc_init_i2c(i2c_inst_t *port, uint8_t scl, uint8_t sda, uint32_t freq);
-bool nfc_init_spi(spi_inst_t *port, uint8_t miso, uint8_t sck, uint8_t mosi,
-                  uint8_t rst, uint8_t nss, uint8_t busy);
-
 /* port and gpio should be initialized before attach */
 void nfc_attach_i2c(i2c_inst_t *port);
-void nfc_attach_spi(spi_inst_t *port, uint8_t rst, uint8_t nss, uint8_t busy);
 /* should attach i2c or spi port before nfc_init() */
 bool nfc_init();
 

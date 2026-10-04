@@ -13,7 +13,6 @@
 
 #include "nfc.h"
 #include "pn532.h"
-#include "pn5180.h"
 
 #define DEBUG(...) { if (nfc_runtime.debug) printf(__VA_ARGS__); }
 
@@ -21,13 +20,11 @@ nfc_runtime_t nfc_runtime;
 
 static enum {
     NFC_MODULE_PN532 = 0,
-    NFC_MODULE_PN5180,
     NFC_MODULE_UNKNOWN,
 } nfc_module = NFC_MODULE_UNKNOWN;
 
 static const char *nfc_module_names[] = {
     "PN532",
-    "PN5180",
     "Unknown",
 };
 
@@ -129,46 +126,6 @@ static struct {
     uint16_t syscode;
 } last_meta;
 
-static nfc_card_name last_card_name = CARD_NONE;
-static bool last_name_final;
-static uint64_t last_card_name_time = 0;
-static card_name_listener_func card_name_listener;
-
-static inline bool last_name_active()
-{
-    return time_us_64() - last_card_name_time <= CARD_INFO_TIMEOUT_US;
-}
-
-static void update_card_name(nfc_card_name card_name, bool final)
-{
-    if (last_name_active() && last_name_final && (last_card_name != card_name)) {
-        // If the last name was final and different, we don't accept the new one
-        return;
-
-    }
-
-    last_card_name = card_name;
-    last_name_final = final;
-
-    last_card_name_time = time_us_64();
-    if (card_name_listener) {
-        card_name_listener(card_name);
-    }
-}
-
-void nfc_set_card_name_listener(card_name_listener_func listener)
-{
-    card_name_listener = listener;
-}
-
-nfc_card_name nfc_last_card_name()
-{
-    if (!last_name_active()) {
-        return CARD_NONE;
-    }
-
-    return last_card_name;
-}
 
 #define func_null NULL
 struct {
@@ -197,29 +154,21 @@ struct {
         func_null,
     },
     {
-        pn5180_firmware_ver,
-        pn5180_poll_mifare, pn5180_poll_felica, pn5180_poll_vicinity,
-        pn5180_rf_field,
-        pn5180_mifare_auth, pn5180_mifare_read,
-        pn5180_felica_read,
-        pn5180_set_wait_loop,
-        pn5180_select,
-        pn5180_deselect,
-        pn5180_15693_read,
+        pn532_firmware_ver,
+        pn532_poll_mifare, pn532_poll_felica, func_null,
+        pn532_rf_field,
+        pn532_mifare_auth, pn532_mifare_read,
+        pn532_felica_read,
+        pn532_set_wait_loop,
+        pn532_select,
+        pn532_deselect,
+        func_null,
     },
-    { 0 },
 };
 
 static struct {
     i2c_inst_t *port;
 } i2c = {0};
-
-static struct {
-    spi_inst_t *port;
-    uint8_t rst;
-    uint8_t nss;
-    uint8_t busy;
-} spi = {0};
 
 static bool find_pn532()
 {
@@ -231,27 +180,9 @@ static bool find_pn532()
     return false;
 }
 
-static bool find_pn5180()
-{
-    if ((spi.port) && pn5180_init(spi.port, spi.rst, spi.nss, spi.busy)) {
-        nfc_module = NFC_MODULE_PN5180;
-        return true;
-    }
-    nfc_module = NFC_MODULE_UNKNOWN;
-    return false;
-}
-
 void nfc_attach_i2c(i2c_inst_t *port)
 {
     i2c.port = port;
-}
-
-void nfc_attach_spi(spi_inst_t *port, uint8_t rst, uint8_t nss, uint8_t busy)
-{
-    spi.port = port;
-    spi.rst = rst;
-    spi.nss = nss;
-    spi.busy = busy;
 }
 
 static void gpio_uninit(uint8_t pin)
@@ -280,28 +211,6 @@ bool nfc_init_i2c(i2c_inst_t *port, uint8_t scl, uint8_t sda, uint32_t freq)
     return false;
 }
 
-bool nfc_init_spi(spi_inst_t *port, uint8_t miso, uint8_t sck, uint8_t mosi,
-                 uint8_t rst, uint8_t nss, uint8_t busy)
-{
-    spi_init(port, 8 * 1000 * 1000);
-    spi_set_format(port, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
-
-    gpio_set_function(miso, GPIO_FUNC_SPI);
-    gpio_set_function(sck, GPIO_FUNC_SPI);
-    gpio_set_function(mosi, GPIO_FUNC_SPI);
-
-    nfc_attach_spi(port, rst, nss, busy);
-
-    if (!find_pn5180()) {
-        gpio_uninit(miso);
-        gpio_uninit(sck);
-        gpio_uninit(mosi);
-        return false;
-    }
-
-    return true;
-}
-
 bool nfc_init()
 {
     if (nfc_module != NFC_MODULE_UNKNOWN) {
@@ -311,8 +220,6 @@ bool nfc_init()
     for (int retry = 0; retry < 3; retry++) {
         if (i2c.port && pn532_init(i2c.port)) {
             nfc_module = NFC_MODULE_PN532;
-        } else if (spi.port && pn5180_init(spi.port, spi.rst, spi.nss, spi.busy)) {
-            nfc_module = NFC_MODULE_PN5180;
         }
         if (nfc_module != NFC_MODULE_UNKNOWN) {
             break;
@@ -426,14 +333,10 @@ nfc_card_t nfc_detect_card()
         update_last_card(&card);
         if (card.card_type == NFC_CARD_FELICA) {
             if (memcmp(card.syscode, "\x88\xB4", 2) == 0) {
-                update_card_name(CARD_AIC, false);
             } else if (memcmp(card.syscode, "\x00\x03", 2) == 0) {
-                update_card_name(CARD_SUICA, true);
             }
         } else if (card.card_type == NFC_CARD_MIFARE) {
-            update_card_name(CARD_MIFARE, false);
         } else if (card.card_type == NFC_CARD_VICINITY) {
-            update_card_name(CARD_VICINITY, false);
         }
 
         return card;
@@ -554,13 +457,10 @@ static void mifare_report_name(uint8_t block_id, const uint8_t block_data[16])
 {
     if (block_id == 0) {
         if (memcmp(block_data + 10, "\xf8\x01", 2) == 0) {
-            update_card_name(CARD_NESICA, true);
         }
     } else if (block_id == 1) {
         if (memcmp(block_data + 2, "NBGIC", 5) == 0) {
-            update_card_name(CARD_BANA, true);
         } else if (memcmp(block_data, "SBSD", 4) == 0) {
-            update_card_name(CARD_AIME, true);
         }
     }
 }
@@ -584,16 +484,11 @@ bool nfc_mifare_read(uint8_t block_id, uint8_t block_data[16])
 
 static void felica_report_name(const uint8_t dfc[2])
 {
-    update_card_name(CARD_AIC, false);
 
     if (dfc[1] == 0x78) {
-        update_card_name(CARD_AIC_SEGA, true);
     } else if (dfc[1] == 0x68) {
-        update_card_name(CARD_AIC_KONAMI, true);
     } else if ((dfc[1] == 0x2a) || (dfc[1] == 0x3a)) {
-        update_card_name(CARD_AIC_BANA, true);
     } else if (dfc[1] == 0x79) {
-        update_card_name(CARD_AIC_NESICA, true);
     }
 }
 
@@ -629,7 +524,6 @@ void nfc_deselect()
 static void vicinity_report_name(uint8_t block_id, const uint8_t block_data[4])
 {
     if ((block_id == 0x1b) && (memcmp(block_data, "W_OK", 4) == 0)) {
-        update_card_name(CARD_EAMUSE, true);
     }
 }
 

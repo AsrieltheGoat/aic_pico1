@@ -15,14 +15,12 @@ aic_cfg_t *aic_cfg;
 static aic_cfg_t default_cfg = {
     .light = { .level_idle = 24, .level_active = 128, .rgb_en = true, .led = true },
     .reader = { .virtual_aic = true, .mode = MODE_AUTO },
-    .lcd = { .backlight = 200, },
 };
 
 aic_runtime_t aic_runtime;
 
 static void config_loaded()
 {
-    aic_cfg->lcd.orientation %= 3;
     if ((aic_cfg->reader.mode != MODE_AIME0) &&
         (aic_cfg->reader.mode != MODE_AIME1) &&
         (aic_cfg->reader.mode != MODE_BANA)) {

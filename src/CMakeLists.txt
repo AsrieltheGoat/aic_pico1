@@ -3,7 +3,7 @@ pico_sdk_init()
 include_directories(${CMAKE_CURRENT_LIST_DIR}
                     ${CMAKE_CURRENT_LIST_DIR}/../include)
 add_compile_options(-Wall -Werror -Wfatal-errors -O3)
-link_libraries(pico_multicore pico_stdlib hardware_i2c hardware_spi
+link_libraries(pico_multicore pico_stdlib hardware_i2c
                tinyusb_device tinyusb_board)
                                    
 function(make_firmware board board_def)
@@ -16,8 +16,7 @@ function(make_firmware board board_def)
     endif()
 
     add_executable(${board}
-                   main.c save.c config.c commands.c light.c keypad.c cardio.c
-                   cst816t.c st7789.c lis3dh.c gui.c gfx.c rle.c
+                   main.c save.c config.c commands.c light.c cardio.c
                    cli.c usb_descriptors.c)
 
     target_compile_definitions(${board} PUBLIC ${board_def}
@@ -39,6 +38,6 @@ function(make_firmware board board_def)
                        COMMAND cp ${board}.uf2 ${CMAKE_CURRENT_LIST_DIR}/..)
 endfunction()
 
-add_library(aic lib/aime.c lib/bana.c lib/pn532.c lib/pn5180.c lib/nfc.c lib/mode.c)
+add_library(aic lib/aime.c lib/bana.c lib/pn532.c lib/nfc.c lib/mode.c)
 
 make_firmware(aic_pico BOARD_AIC_PICO)

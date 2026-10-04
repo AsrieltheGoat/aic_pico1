@@ -43,6 +43,13 @@ int cli_match_prefix(const char *str[], int num, const char *prefix)
     int match = -1;
     bool found = false;
 
+    // Exact command names take priority over prefix matches.
+    for (int i = 0; (i < num) && str[i]; i++) {
+        if (strcasecmp(str[i], prefix) == 0) {
+            return i;
+        }
+    }
+
     for (int i = 0; (i < num) && str[i]; i++) {
         if (strncasecmp(str[i], prefix, strlen(prefix)) == 0) {
             if (found) {

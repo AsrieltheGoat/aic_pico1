@@ -35,58 +35,13 @@
 #include "commands.h"
 #include "cardio.h"
 #include "light.h"
-#include "keypad.h"
-#include "lis3dh.h"
-#include "gui.h"
 
 #define DEBUG(...) if (aic_runtime.debug) printf(__VA_ARGS__)
 
-struct __attribute__((packed)) {
-    uint8_t modifier;
-    uint8_t keymap[15];
-} hid_nkro;
-
-static const char keymap[12] = KEYPAD_NKRO_MAP;
-
-static inline void set_nkro_bit(uint8_t code)
-{
-    int byte = code / 8;
-    if (byte < sizeof(hid_nkro.keymap)) {
-        int bit = code % 8;
-        hid_nkro.keymap[byte] |= (1 << (bit));
-    }
-}
-
-void report_hid_key()
-{
-    if (!tud_hid_ready()) {
-        return;
-    }
-
-    uint16_t keys = aic_runtime.touch ? gui_keypad_read() : keypad_read();
-
-    memset(&hid_nkro, 0, sizeof(hid_nkro));
-
-    if (cardio_autopin_rolling()) {
-        int auto_pin_key = cardio_get_pin_key();
-        if (auto_pin_key > 0) {
-            set_nkro_bit(auto_pin_key);
-        }
-    } else {
-        for (int i = 0; i < keypad_key_num(); i++) {
-            if (keys & (1 << i)) {
-                set_nkro_bit(keymap[i]);
-            }
-        }
-    }
-
-    tud_hid_n_report(1, 0, &hid_nkro, sizeof(hid_nkro));
-}
 
 void report_usb_hid()
 {
     cardio_report_cardio();
-    report_hid_key();
 }
 
 static uint64_t last_hid_time = 0;
@@ -122,11 +77,6 @@ static void light_mode_update()
 static void core1_init()
 {
     flash_safe_execute_core_init();
-
-    if (aic_runtime.touch) {
-        gui_init();
-        gui_level(aic_cfg->lcd.backlight);
-    }
 }
 
 static void core1_loop()
@@ -136,9 +86,6 @@ static void core1_loop()
     core1_init();
 
     while (1) {
-        if (aic_runtime.touch) {
-            gui_loop();
-        }
         light_update();
 
         light_mode_update();
@@ -149,10 +96,6 @@ static void core1_loop()
     }
 }
 
-void card_name_update_cb(nfc_card_name card_name)
-{
-    gui_report_card_name(card_name);
-}
 
 const int reader_intf = 1;
 static struct {
@@ -255,8 +198,6 @@ static void reader_run()
 
 void wait_loop()
 {
-    keypad_update();
-    report_hid_key();
 
     tud_task();
     cli_run();
@@ -280,10 +221,8 @@ static void core0_loop()
             cardio_run(hid_light_is_active());
         }
         
-        keypad_update();
         report_usb_hid();
 
-        lis3dh_update();
     
         save_loop();
         cli_fps_count(0);
@@ -291,35 +230,16 @@ static void core0_loop()
     }
 }
 
-static void spi_overclock()
-{
-    uint32_t freq = clock_get_hz(clk_sys);
-    clock_configure(clk_peri, 0, CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS, freq, freq);
-}
 
-static void identify_touch()
-{
-    gpio_init(AIC_TOUCH_EN);
-    gpio_set_function(AIC_TOUCH_EN, GPIO_FUNC_SIO);
-    gpio_set_dir(AIC_TOUCH_EN, GPIO_IN);
-    gpio_pull_up(AIC_TOUCH_EN);
-    sleep_us(0);
-    aic_runtime.touch = !gpio_get(AIC_TOUCH_EN);
-}
 
 static void find_nfc_module()
 {
-    if (nfc_init_spi(SPI_PORT, SPI_MISO, SPI_SCK, SPI_MOSI,
-                     SPI_RST, SPI_NSS, SPI_BUSY)) {
-        return;
-    }
-
     static struct {
         i2c_inst_t *port;
         uint8_t scl;
         uint8_t sda;
     } i2c[] = I2C_PORT_LIST;
-    
+
     for (int retry = 0; retry < 3; retry++) {
         for (int i = 0; i < count_of(i2c); i++) {
             if (nfc_init_i2c(i2c[i].port, i2c[i].scl, i2c[i].sda, I2C_FREQ)) {
@@ -344,60 +264,23 @@ void init()
     config_init();
     save_init(0xca340a1c);
 
-    identify_touch();
-
     light_init();
     light_set_rgb_order(aic_cfg->light.rgb_order);
     light_rainbow(1, 0, aic_cfg->light.level_idle);
 
-    if (!aic_runtime.touch) {
-        keypad_init();
-    }
-
     pico_led_off();
-
-    spi_overclock();
 
     find_nfc_module();
 
     nfc_set_wait_loop(wait_loop);
-    nfc_set_card_name_listener(card_name_update_cb);
-
     aime_init(cdc_reader_putc);
     aime_virtual_aic(aic_cfg->reader.virtual_aic);
     bana_init(cdc_reader_putc);
-
-    lis3dh_init(i2c0, 0x4);
 
     cli_init("aic_pico>", "\n     << AIC Pico >>\n"
                             " https://github.com/whowechina\n\n");
     
     commands_init();
-}
-
-/* if certain key pressed when booting, enter update mode */
-static void boot_update_check()
-{
-    const uint8_t pins[] = { 10, 11 }; // keypad 00 and *
-    bool all_pressed = true;
-    for (int i = 0; i < sizeof(pins); i++) {
-        uint8_t gpio = pins[i];
-        gpio_init(gpio);
-        gpio_set_function(gpio, GPIO_FUNC_SIO);
-        gpio_set_dir(gpio, GPIO_IN);
-        gpio_pull_up(gpio);
-        sleep_ms(1);
-        if (gpio_get(gpio)) {
-            all_pressed = false;
-            break;
-        }
-    }
-
-    if (all_pressed) {
-        sleep_ms(100);
-        reset_usb_boot(0, 2);
-        return;
-    }
 }
 
 static void sys_init()
@@ -410,7 +293,6 @@ static void sys_init()
 int main(void)
 {
     sys_init();
-    boot_update_check();
     init();
     multicore_launch_core1(core1_loop);
     core0_loop();

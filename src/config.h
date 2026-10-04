@@ -24,31 +24,16 @@ typedef struct __attribute__((packed)) {
         bool virtual_aic;
         uint8_t mode;
     } reader;
-    struct {
-        uint8_t backlight;
-        uint8_t orientation; // 0: auto, 1: up, 2: down
-    } lcd;
+    uint8_t lcd_reserved[2];
     struct {
         uint8_t reserved[4];
     } tweak;
     uint8_t padding[3];
-    struct {
-        struct {
-            uint8_t uidlen;
-            uint8_t swipe : 1;
-            uint8_t delay : 7;
-            uint8_t uid[8];
-            char pin[16];
-        } entries[4];
-        bool enabled;
-        uint8_t reserved[3];
-    } autopin;
     uint32_t reserved;
 } aic_cfg_t;
 
 typedef volatile struct {
     bool debug;
-    bool touch;
     reader_mode_t mode;
 } aic_runtime_t;
 
